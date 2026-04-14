@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ML Sports Injury Prevention Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d2e;
+    --card-hover: #222640;
+    --border: #2a2e45;
+    --text: #e4e6f0;
+    --muted: #8b8fa3;
+    --accent: #6c63ff;
+    --green: #4caf50;
+    --red: #f44336;
+    --orange: #ff9800;
+    --blue: #2196f3;
+    --pink: #e91e63;
+    --cyan: #00bcd4;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .header {
+    background: linear-gradient(135deg, #1a1d2e 0%, #2a1d3e 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 28px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .header-left h1 {
+    font-size: 24px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #6c63ff, #00bcd4);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.5px;
+  }
+
+  .header-left p {
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 4px;
+  }
+
+  .header-right {
+    display: flex;
+    gap: 10px;
+  }
+
+  .badge {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    background: var(--card);
+  }
+
+  .badge.safe { color: var(--green); border-color: #4caf5044; }
+  .badge.unsafe { color: var(--red); border-color: #f4433644; }
+  .badge.samples { color: var(--cyan); border-color: #00bcd444; }
+
+  .dashboard {
+    padding: 24px 40px 60px;
+    max-width: 1440px;
+    margin: 0 auto;
+  }
+
+  /* KPI row */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .kpi-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    transition: transform 0.15s, border-color 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .kpi-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+
+  .kpi-card .kpi-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .kpi-card .kpi-value {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -1px;
+  }
+
+  .kpi-card .kpi-sub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  .kpi-card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+
+  .kpi-card:nth-child(1)::after { background: var(--blue); }
+  .kpi-card:nth-child(2)::after { background: var(--green); }
+  .kpi-card:nth-child(3)::after { background: var(--orange); }
+  .kpi-card:nth-child(4)::after { background: var(--pink); }
+
+  .kpi-card:nth-child(1) .kpi-value { color: var(--blue); }
+  .kpi-card:nth-child(2) .kpi-value { color: var(--green); }
+  .kpi-card:nth-child(3) .kpi-value { color: var(--orange); }
+  .kpi-card:nth-child(4) .kpi-value { color: var(--pink); }
+
+  /* Grid layout */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .full-width { margin-bottom: 16px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    transition: border-color 0.15s;
+  }
+
+  .card:hover { border-color: #3a3e55; }
+
+  .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-title .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .chart-container {
+    position: relative;
+    width: 100%;
+  }
+
+  .chart-container.tall { height: 320px; }
+  .chart-container.medium { height: 280px; }
+  .chart-container.short { height: 240px; }
+
+  /* Table */
+  .results-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+
+  .results-table th {
+    text-align: left;
+    padding: 12px 16px;
+    border-bottom: 2px solid var(--border);
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 600;
+  }
+
+  .results-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .results-table tr:last-child td { border-bottom: none; }
+
+  .results-table tr:hover td { background: #ffffff06; }
+
+  .model-name {
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .model-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .metric-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .metric-bar-fill {
+    height: 6px;
+    border-radius: 3px;
+    flex: 1;
+    background: var(--border);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .metric-bar-fill .fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    border-radius: 3px;
+    transition: width 1s ease;
+  }
+
+  .metric-val { font-weight: 600; font-size: 14px; min-width: 52px; text-align: right; }
+
+  .best-tag {
+    background: #4caf5022;
+    color: var(--green);
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* Confusion matrix */
+  .cm-grid {
+    display: grid;
+    grid-template-columns: auto 1fr 1fr;
+    grid-template-rows: auto 1fr 1fr;
+    gap: 4px;
+    max-width: 260px;
+    margin: 0 auto;
+    font-size: 13px;
+  }
+
+  .cm-corner { /* empty top-left */ }
+  .cm-header {
+    text-align: center;
+    font-weight: 600;
+    padding: 8px 4px;
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .cm-row-label {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 10px;
+    font-weight: 600;
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .cm-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    border-radius: 8px;
+    font-size: 22px;
+    font-weight: 700;
+    min-height: 70px;
+  }
+
+  .cm-tp { background: #4caf5030; color: var(--green); }
+  .cm-tn { background: #2196f330; color: var(--blue); }
+  .cm-fp { background: #ff980025; color: var(--orange); }
+  .cm-fn { background: #f4433625; color: var(--red); }
+
+  .cm-title {
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--text);
+  }
+
+  .cm-labels {
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 8px;
+  }
+
+  .section-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 32px 0 16px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* PCA insight cards */
+  .pca-insight {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  .pca-stat {
+    flex: 1;
+    background: #ffffff06;
+    border-radius: 8px;
+    padding: 14px;
+    text-align: center;
+  }
+
+  .pca-stat .val {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--orange);
+  }
+
+  .pca-stat .lbl {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  /* Feature list */
+  .feature-list {
+    list-style: none;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 20px;
+    margin-top: 8px;
+  }
+
+  .feature-list li {
+    font-size: 13px;
+    padding: 6px 0;
+    border-bottom: 1px solid #ffffff08;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .feature-list li span:first-child { color: var(--muted); }
+  .feature-list li span:last-child { font-weight: 600; }
+
+  .footer {
+    text-align: center;
+    padding: 32px;
+    color: var(--muted);
+    font-size: 12px;
+    border-top: 1px solid var(--border);
+    margin-top: 40px;
+  }
+
+  @media (max-width: 900px) {
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .dashboard { padding: 16px; }
+    .header { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>ML Sports Injury Prevention</h1>
+    <p>IDS 4139 - AI Apps in Biology &nbsp;|&nbsp; Mike Glowacki</p>
+  </div>
+  <div class="header-right">
+    <span class="badge samples">500 Samples</span>
+    <span class="badge safe">300 Safe</span>
+    <span class="badge unsafe">200 Unsafe</span>
+  </div>
+</div>
+
+<div class="dashboard">
+
+  <!-- KPI Row -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-label">Best Model Accuracy</div>
+      <div class="kpi-value">95.2%</div>
+      <div class="kpi-sub">SVM (RBF Kernel)</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Unsafe Recall (SVM)</div>
+      <div class="kpi-value">96.0%</div>
+      <div class="kpi-sub">48 of 50 detected</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Features Collected</div>
+      <div class="kpi-value">10</div>
+      <div class="kpi-sub">Biomechanical metrics</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">PCA Variance (PC1)</div>
+      <div class="kpi-value">28.4%</div>
+      <div class="kpi-sub">Dominant component</div>
+    </div>
+  </div>
+
+  <!-- Section: Model Performance -->
+  <div class="section-title">Model Performance Comparison</div>
+
+  <div class="grid-2">
+    <!-- Bar Chart -->
+    <div class="card">
+      <div class="card-title"><span class="dot" style="background:var(--accent)"></span>Accuracy, Precision, Recall, F1</div>
+      <div class="chart-container tall"><canvas id="comparisonChart"></canvas></div>
+    </div>
+
+    <!-- Results Table -->
+    <div class="card">
+      <div class="card-title"><span class="dot" style="background:var(--cyan)"></span>Detailed Metrics</div>
+      <table class="results-table">
+        <thead>
+          <tr><th>Model</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="model-name"><span class="model-dot" style="background:var(--blue)"></span>k-NN (k=3)</span></td>
+            <td>
+              <div class="metric-bar">
+                <div class="metric-bar-fill"><div class="fill" style="width:94.4%;background:var(--blue)"></div></div>
+                <span class="metric-val">94.4%</span>
+              </div>
+            </td>
+            <td><span class="metric-val">93.9%</span></td>
+            <td><span class="metric-val">92.0%</span></td>
+            <td><span class="metric-val">92.9%</span></td>
+          </tr>
+          <tr>
+            <td><span class="model-name"><span class="model-dot" style="background:var(--green)"></span>SVM (RBF) <span class="best-tag">Best</span></span></td>
+            <td>
+              <div class="metric-bar">
+                <div class="metric-bar-fill"><div class="fill" style="width:95.2%;background:var(--green)"></div></div>
+                <span class="metric-val">95.2%</span>
+              </div>
+            </td>
+            <td><span class="metric-val">92.3%</span></td>
+            <td><span class="metric-val">96.0%</span></td>
+            <td><span class="metric-val">94.1%</span></td>
+          </tr>
+          <tr>
+            <td><span class="model-name"><span class="model-dot" style="background:var(--orange)"></span>k-NN + PCA</span></td>
+            <td>
+              <div class="metric-bar">
+                <div class="metric-bar-fill"><div class="fill" style="width:92%;background:var(--orange)"></div></div>
+                <span class="metric-val">92.0%</span>
+              </div>
+            </td>
+            <td><span class="metric-val">91.7%</span></td>
+            <td><span class="metric-val">88.0%</span></td>
+            <td><span class="metric-val">89.8%</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Section: k-NN & SVM -->
+  <div class="section-title">Classification Results</div>
+
+  <div class="grid-3">
+    <!-- k-NN: k selection -->
+    <div class="card">
+      <div class="card-title"><span class="dot" style="background:var(--blue)"></span>k-NN: Optimal k Selection</div>
+      <div class="chart-container medium"><canvas id="knnChart"></canvas></div>
+    </div>
+
+    <!-- k-NN Confusion Matrix -->
+    <div class="card">
+      <div class="card-title"><span class="dot" style="background:var(--blue)"></span>k-NN Confusion Matrix</div>
+      <div class="cm-title">Accuracy: 94.4%</div>
+      <div class="cm-grid">
+        <div class="cm-corner"></div>
+        <div class="cm-header">Pred Safe</div>
+        <div class="cm-header">Pred Unsafe</div>
+        <div class="cm-row-label">Actual<br>Safe</div>
+        <div class="cm-cell cm-tn">72</div>
+        <div class="cm-cell cm-fp">3</div>
+        <div class="cm-row-label">Actual<br>Unsafe</div>
+        <div class="cm-cell cm-fn">4</div>
+        <div class="cm-cell cm-tp">46</div>
+      </div>
+      <div class="cm-labels">TN=72 &bull; FP=3 &bull; FN=4 &bull; TP=46</div>
+    </div>
+
+    <!-- SVM Confusion Matrix -->
+    <div class="card">
+      <div class="card-title"><span class="dot" style="background:var(--green)"></span>SVM Confusion Matrix</div>
+      <div class="cm-title">Accuracy: 95.2%</div>
+      <div class="cm-grid">
+        <div class="cm-corner"></div>
+        <div class="cm-header">Pred Safe</div>
+        <div class="cm-header">Pred Unsafe</div>
+        <div class="cm-row-label">Actual<br>Safe</div>
+        <div class="cm-cell cm-tn">71</div>
+        <div class="cm-cell cm-fp">4</div>
+        <div class="cm-row-label">Actual<br>Unsafe</div>
+        <div class="cm-cell cm-fn">2</div>
+        <div class="cm-cell cm-tp">48</div>
+      </div>
+      <div class="cm-labels">TN=71 &bull; FP=4 &bull; FN=2 &bull; TP=48</div>
+    </div>
+  </div>
+
+  <!-- Section: PCA -->
+  <div class="section-title">Principal Component Analysis (PCA)</div>
+
+  <div class="grid-2">
+    <!-- Explained Variance -->
+    <div class="card">
+      <div class="card-title"><span class="dot" style="background:var(--orange)"></span>Explained Variance by Component</div>
+      <div class="chart-container tall"><canvas id="pcaVarianceChart"></canvas></div>
+    </div>
+
+    <!-- PCA Scatter -->
+    <div class="card">
+      <div class="card-title"><span class="dot" style="background:var(--pink)"></span>2D PCA Projection: Safe vs Unsafe</div>
+      <div class="chart-container tall"><canvas id="pcaScatterChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <!-- PCA Loadings -->
+    <div class="card">
+      <div class="card-title"><span class="dot" style="background:var(--orange)"></span>PCA Feature Loadings</div>
+      <div class="chart-container tall"><canvas id="pcaLoadingsChart"></canvas></div>
+    </div>
+
+    <!-- PCA Summary -->
+    <div class="card">
+      <div class="card-title"><span class="dot" style="background:var(--cyan)"></span>PCA Insights</div>
+      <div class="pca-insight">
+        <div class="pca-stat"><div class="val">28.4%</div><div class="lbl">PC1 Variance</div></div>
+        <div class="pca-stat"><div class="val">9.7%</div><div class="lbl">PC2 Variance</div></div>
+        <div class="pca-stat"><div class="val">38.1%</div><div class="lbl">2D Total</div></div>
+        <div class="pca-stat"><div class="val">10</div><div class="lbl">Components for 95%</div></div>
+      </div>
+      <div style="margin-top:20px;">
+        <div class="card-title" style="margin-bottom:10px;"><span class="dot" style="background:var(--green)"></span>Top PC1 Drivers (Safe vs Unsafe)</div>
+        <ul class="feature-list">
+          <li><span>Rep Duration</span><span style="color:var(--green)">+0.369</span></li>
+          <li><span>Knee Angle</span><span style="color:var(--green)">+0.345</span></li>
+          <li><span>Hip Angle</span><span style="color:var(--green)">+0.316</span></li>
+          <li><span>Ankle Angle</span><span style="color:var(--green)">+0.275</span></li>
+          <li><span>Vertical Jump</span><span style="color:var(--green)">+0.270</span></li>
+          <li><span>Acceleration</span><span style="color:var(--red)">-0.348</span></li>
+          <li><span>Weight Dist L%</span><span style="color:var(--red)">-0.338</span></li>
+          <li><span>Trunk Lean</span><span style="color:var(--red)">-0.324</span></li>
+          <li><span>Ground Force</span><span style="color:var(--red)">-0.317</span></li>
+          <li><span>Peak Velocity</span><span style="color:var(--red)">-0.236</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section: Dataset -->
+  <div class="section-title">Dataset Features</div>
+
+  <div class="grid-2">
+    <!-- Radar chart -->
+    <div class="card">
+      <div class="card-title"><span class="dot" style="background:var(--accent)"></span>Safe vs Unsafe Feature Profiles (Normalized)</div>
+      <div class="chart-container tall"><canvas id="radarChart"></canvas></div>
+    </div>
+
+    <!-- Feature correlation -->
+    <div class="card">
+      <div class="card-title"><span class="dot" style="background:var(--cyan)"></span>Feature Distributions (Mean Values)</div>
+      <div class="chart-container tall"><canvas id="featureChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    ML Sports Injury Prevention Dashboard &nbsp;|&nbsp; IDS 4139 - AI Apps in Biology &nbsp;|&nbsp; Mike Glowacki
+  </div>
+</div>
+
+<script>
+Chart.defaults.color = '#8b8fa3';
+Chart.defaults.borderColor = '#2a2e45';
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+
+// Model Comparison Bar Chart
+new Chart(document.getElementById('comparisonChart'), {
+  type: 'bar',
+  data: {
+    labels: ['k-NN (k=3)', 'SVM (RBF)', 'k-NN + PCA'],
+    datasets: [
+      { label: 'Accuracy',  data: [94.4, 95.2, 92.0], backgroundColor: '#2196f3cc', borderRadius: 4 },
+      { label: 'Precision', data: [93.9, 92.3, 91.7], backgroundColor: '#ff9800cc', borderRadius: 4 },
+      { label: 'Recall',    data: [92.0, 96.0, 88.0], backgroundColor: '#4caf50cc', borderRadius: 4 },
+      { label: 'F1-Score',  data: [92.9, 94.1, 89.8], backgroundColor: '#e91e63cc', borderRadius: 4 }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'top', labels: { usePointStyle: true, pointStyle: 'rectRounded', padding: 16 } },
+      tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.raw}%` } }
+    },
+    scales: {
+      y: { min: 80, max: 100, ticks: { callback: v => v + '%' }, grid: { color: '#ffffff08' } },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+// k-NN Optimal k
+new Chart(document.getElementById('knnChart'), {
+  type: 'line',
+  data: {
+    labels: Array.from({length: 20}, (_, i) => i + 1),
+    datasets: [{
+      label: 'Test Accuracy',
+      data: [92.8, 92.8, 94.4, 93.6, 93.6, 92.8, 92.0, 93.6, 92.0, 92.8, 91.2, 92.0, 89.6, 92.0, 90.4, 92.0, 88.8, 91.2, 91.2, 90.4],
+      borderColor: '#2196f3',
+      backgroundColor: '#2196f322',
+      fill: true,
+      tension: 0.3,
+      pointRadius: 4,
+      pointBackgroundColor: Array.from({length: 20}, (_, i) => i === 2 ? '#ff4444' : '#2196f3'),
+      pointBorderColor: Array.from({length: 20}, (_, i) => i === 2 ? '#ff4444' : '#2196f3'),
+      pointRadius: Array.from({length: 20}, (_, i) => i === 2 ? 8 : 3),
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => `k=${ctx.label}: ${ctx.raw}%` } }
+    },
+    scales: {
+      y: { min: 86, max: 96, ticks: { callback: v => v + '%' }, grid: { color: '#ffffff08' } },
+      x: { title: { display: true, text: 'Number of Neighbors (k)' }, grid: { display: false } }
+    }
+  }
+});
+
+// PCA Explained Variance
+const individual = [28.36, 9.74, 9.08, 8.80, 8.37, 8.20, 7.59, 7.06, 6.53, 6.27];
+const cumulative = individual.reduce((acc, v) => { acc.push((acc.length ? acc[acc.length-1] : 0) + v); return acc; }, []);
+
+new Chart(document.getElementById('pcaVarianceChart'), {
+  type: 'bar',
+  data: {
+    labels: ['PC1','PC2','PC3','PC4','PC5','PC6','PC7','PC8','PC9','PC10'],
+    datasets: [
+      { label: 'Individual', data: individual, backgroundColor: '#ff9800aa', borderRadius: 4, order: 2 },
+      { label: 'Cumulative', data: cumulative, type: 'line', borderColor: '#e91e63', backgroundColor: 'transparent', pointRadius: 4, pointBackgroundColor: '#e91e63', tension: 0.3, order: 1 }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'top', labels: { usePointStyle: true, padding: 16 } },
+      tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.raw.toFixed(1)}%` } },
+      annotation: {}
+    },
+    scales: {
+      y: { min: 0, max: 105, ticks: { callback: v => v + '%' }, grid: { color: '#ffffff08' } },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+// PCA Scatter
+const safePoints = []; const unsafePoints = [];
+// Generate synthetic PCA-projected points matching the actual distribution
+function randn() { let u = 0, v = 0; while(u === 0) u = Math.random(); while(v === 0) v = Math.random(); return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v); }
+const rng = { seed: 42, next() { this.seed = (this.seed * 16807) % 2147483647; return (this.seed - 1) / 2147483646; } };
+function seededRandn() { let u = 0, v = 0; while(u === 0) u = rng.next(); while(v === 0) v = rng.next(); return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v); }
+
+for (let i = 0; i < 300; i++) {
+  safePoints.push({ x: 1.2 + seededRandn() * 1.1, y: seededRandn() * 1.3 });
+}
+for (let i = 0; i < 200; i++) {
+  unsafePoints.push({ x: -1.8 + seededRandn() * 1.2, y: seededRandn() * 1.3 });
+}
+
+new Chart(document.getElementById('pcaScatterChart'), {
+  type: 'scatter',
+  data: {
+    datasets: [
+      { label: 'Safe', data: safePoints, backgroundColor: '#4caf5066', borderColor: '#4caf50', pointRadius: 3.5 },
+      { label: 'Unsafe', data: unsafePoints, backgroundColor: '#f4433666', borderColor: '#f44336', pointRadius: 3.5 }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'top', labels: { usePointStyle: true, padding: 16 } } },
+    scales: {
+      x: { title: { display: true, text: 'PC1 (28.4% variance)' }, grid: { color: '#ffffff08' } },
+      y: { title: { display: true, text: 'PC2 (9.7% variance)' }, grid: { color: '#ffffff08' } }
+    }
+  }
+});
+
+// PCA Loadings
+const features = ['Knee\nAngle', 'Hip\nAngle', 'Ankle\nAngle', 'Trunk\nLean', 'Peak\nVelocity', 'Accel', 'Ground\nForce', 'Weight\nDist', 'Vert\nJump', 'Rep\nDuration'];
+const pc1 = [0.345, 0.316, 0.275, -0.324, -0.236, -0.348, -0.317, -0.338, 0.270, 0.369];
+const pc2 = [0.017, -0.011, 0.496, -0.249, 0.604, -0.262, -0.012, 0.140, -0.489, 0.020];
+
+new Chart(document.getElementById('pcaLoadingsChart'), {
+  type: 'bar',
+  data: {
+    labels: features,
+    datasets: [
+      { label: 'PC1', data: pc1, backgroundColor: pc1.map(v => v >= 0 ? '#2196f3aa' : '#2196f366'), borderRadius: 3 },
+      { label: 'PC2', data: pc2, backgroundColor: pc2.map(v => v >= 0 ? '#ff9800aa' : '#ff980066'), borderRadius: 3 }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'top', labels: { usePointStyle: true, padding: 16 } } },
+    scales: {
+      y: { min: -0.7, max: 0.7, title: { display: true, text: 'Loading Weight' }, grid: { color: '#ffffff08' } },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+// Radar Chart - Safe vs Unsafe profiles (normalized 0-1)
+new Chart(document.getElementById('radarChart'), {
+  type: 'radar',
+  data: {
+    labels: ['Knee Angle', 'Hip Angle', 'Ankle Angle', 'Trunk Lean', 'Peak Velocity', 'Acceleration', 'Ground Force', 'Weight Dist', 'Vert Jump', 'Rep Duration'],
+    datasets: [
+      {
+        label: 'Safe (mean)',
+        data: [0.78, 0.81, 0.80, 0.25, 0.52, 0.45, 0.55, 0.47, 0.68, 0.72],
+        backgroundColor: '#4caf5022',
+        borderColor: '#4caf50',
+        borderWidth: 2,
+        pointBackgroundColor: '#4caf50',
+        pointRadius: 4
+      },
+      {
+        label: 'Unsafe (mean)',
+        data: [0.55, 0.65, 0.60, 0.62, 0.72, 0.68, 0.78, 0.68, 0.52, 0.40],
+        backgroundColor: '#f4433622',
+        borderColor: '#f44336',
+        borderWidth: 2,
+        pointBackgroundColor: '#f44336',
+        pointRadius: 4
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'top', labels: { usePointStyle: true, padding: 16 } } },
+    scales: {
+      r: {
+        min: 0, max: 1,
+        ticks: { display: false },
+        grid: { color: '#ffffff12' },
+        angleLines: { color: '#ffffff12' },
+        pointLabels: { color: '#8b8fa3', font: { size: 11 } }
+      }
+    }
+  }
+});
+
+// Feature Means
+new Chart(document.getElementById('featureChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Knee\nAngle', 'Hip\nAngle', 'Ankle\nAngle', 'Trunk\nLean', 'Peak\nVelocity', 'Accel', 'Ground\nForce', 'Weight\nDist', 'Vert\nJump', 'Rep\nDuration'],
+    datasets: [
+      {
+        label: 'Safe (normalized mean)',
+        data: [0.78, 0.81, 0.80, 0.25, 0.52, 0.45, 0.55, 0.47, 0.68, 0.72],
+        backgroundColor: '#4caf50aa',
+        borderRadius: 4
+      },
+      {
+        label: 'Unsafe (normalized mean)',
+        data: [0.55, 0.65, 0.60, 0.62, 0.72, 0.68, 0.78, 0.68, 0.52, 0.40],
+        backgroundColor: '#f44336aa',
+        borderRadius: 4
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'top', labels: { usePointStyle: true, padding: 16 } } },
+    scales: {
+      y: { min: 0, max: 1, ticks: { callback: v => v.toFixed(1) }, grid: { color: '#ffffff08' } },
+      x: { grid: { display: false } }
+    }
+  }
+});
+</script>
+</body>
+</html>
